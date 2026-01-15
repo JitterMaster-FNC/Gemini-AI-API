@@ -69,7 +69,7 @@ function App() {
       setActiveChatId(newId);
       currentChatId = newId;
 
-      axios.post('http://localhost:8000/generate_title', { message: currentInput || "ファイル添付" })
+      axios.post('https://gemini-ai-api-gpf7.onrender.com/generate_title', { message: currentInput || "ファイル添付" })
         .then(res => {
           setChats(prev => prev.map(c => c.id === newId ? { ...c, title: res.data.title } : c));
         })
@@ -92,7 +92,7 @@ function App() {
         formData.append('file', currentFile);
       }
 
-      const res = await axios.post('http://localhost:8000/chat', formData, {
+      const res = await axios.post('https://gemini-ai-api-gpf7.onrender.com/chat', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
