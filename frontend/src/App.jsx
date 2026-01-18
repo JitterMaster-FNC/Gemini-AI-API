@@ -152,19 +152,8 @@ function App() {
           )}
         </div>
 
-        <input 
-          type="file" 
-          ref={imageInputRef} 
-          style={{ display: 'none' }} 
-          accept="image/*" 
-          onChange={handleFileChange} 
-        />
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          style={{ display: 'none' }} 
-          onChange={handleFileChange} 
-        />
+        <input type="file" ref={imageInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleFileChange} />
+        <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
 
         <input 
           style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: 'white', fontSize: '1.1rem', outline: 'none', fontFamily: segoeFont }}
@@ -183,6 +172,7 @@ function App() {
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', backgroundColor: '#1e1e1e', color: 'white', fontFamily: segoeFont, overflow: 'hidden' }}>
       
+      {/* サイドバー */}
       <div style={{ width: '260px', backgroundColor: '#171717', display: 'flex', flexDirection: 'column', padding: '10px', boxSizing: 'border-box', borderRight: '1px solid #333' }}>
         <button 
           onClick={goToLanding}
@@ -216,11 +206,16 @@ function App() {
         </div>
       </div>
 
+      {/* メインエリア */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', padding: !activeChat ? '0' : '40px 20px 150px 20px', justifyContent: !activeChat ? 'center' : 'flex-start' }}>
           {!activeChat ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-               <h1 style={{ fontSize: '4rem', fontWeight: 'bold', letterSpacing: '-1px', margin: '0' }}>MY AI API</h1>
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '10px' }}>
+                  <img src="/cat.png" style={{ height: '100px', width: 'auto' }} alt="logo-left" />
+                  <h1 style={{ fontSize: '4rem', fontWeight: 'bold', letterSpacing: '-1px', margin: '0' }}>Self Made AI</h1>
+                  <img src="/cat.png" style={{ height: '100px', width: 'auto' }} alt="logo-right" />
+               </div>
                {renderInputSection(true)}
             </div>
           ) : (
@@ -246,7 +241,7 @@ function App() {
       <style>{`
         .markdown-body table { border-collapse: collapse; width: 100%; margin: 10px 0; }
         .markdown-body th, .markdown-body td { border: 1px solid #444; padding: 8px; text-align: left; }
-        .markdown-body th { backgroundColor: #333; }
+        .markdown-body th { background-color: #333; }
         .markdown-body p { margin: 8px 0; }
         .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 16px 0 8px 0; }
       `}</style>

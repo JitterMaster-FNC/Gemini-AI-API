@@ -72,7 +72,7 @@ async def chat(message: str = Form(""), file: Optional[UploadFile] = File(None))
     print(f"--- New Chat Request Received ---", flush=True)
     try:
         client = get_next_client()
-        parts = ["詳細に日本語で回答してください。マークダウン形式（表や太字）を適切に使ってください。"]
+        parts = ["日本語で回答してください。マークダウン形式（表や太字）を適切に使ってください。"]
         
         if message:
             parts.append(f"質問: {message}")
