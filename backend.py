@@ -21,22 +21,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- APIキーの取得ロジック ---
-# 環境変数が設定されていない場合、コード内の値をフォールバックとして使います
-key1 = os.getenv("GEMINI_API_KEY_1", "AIzaSyAxSJE5c-aB3i0TkvgBa8ja432Bw1oo5tQ")
-key2 = os.getenv("GEMINI_API_KEY_2", "AIzaSyCDjrjx0-z5Zsv0JLOV9Xr-HMTimBqTrNo")
+# --- APIキーの設定（GitHubに漏洩させない設定） ---
+# 第2引数の空文字部分は、ローカルテスト時のみ自分のキーを一時的に貼ってもOKですが、
+# GitHubに上げる前には必ず空にするか、このままにしてください。
+key1 = os.getenv("GEMINI_API_KEY_1", "")
+key2 = os.getenv("GEMINI_API_KEY_2", "")
 
+# 有効なキーだけをリスト化
 API_KEYS = [k for k in [key1, key2] if k]
+
+# 万が一キーが設定されていない場合の安全策
+if not API_KEYS:
+    print("WARNING: No API keys found in Environment Variables!")
+    # ローカルテスト用に一時的にここに書く場合は、Push前に消してください
+    # API_KEYS = ["YOUR_TEST_KEY_HERE"]
+
 key_cycle = itertools.cycle(API_KEYS)
 
 def get_next_client():
+    if not API_KEYS:
+        raise Exception("APIキーが設定されていません。RenderのEnvironment設定を確認してください。")
     next_key = next(key_cycle)
-    # ログに使用するキーの断片を表示
     print(f"DEBUG: Using Key starting with: {next_key[:8]}...", flush=True)
     return genai.Client(api_key=next_key)
 
 def generate_with_retry(client, contents):
-    # あなたの環境で最も可能性が高いモデル名のリスト
+    """
+    1.5 Flash（1500回枠）を優先し、エラーがあれば次を試すロジック
+    """
     candidates = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
     
     last_error = None
@@ -50,7 +62,7 @@ def generate_with_retry(client, contents):
             return response.text
         except Exception as e:
             last_error = e
-            print(f"DEBUG: Model {model_name} failed. Error: {str(e)[:100]}", flush=True)
+            print(f"DEBUG: Model {model_name} failed. Reason: {str(e)[:50]}...", flush=True)
             continue
             
     raise last_error
@@ -60,26 +72,31 @@ async def chat(message: str = Form(""), file: Optional[UploadFile] = File(None))
     print(f"--- New Chat Request Received ---", flush=True)
     try:
         client = get_next_client()
-        parts = ["詳細に日本語で回答してください。"]
+        parts = ["詳細に日本語で回答してください。マークダウン形式（表や太字）を適切に使ってください。"]
+        
         if message:
             parts.append(f"質問: {message}")
+        
         if file:
             file_data = await file.read()
-            parts.append(types.Part.from_bytes(data=file_data, mime_type=file.content_type))
+            parts.append(types.Part.from_bytes(
+                data=file_data,
+                mime_type=file.content_type
+            ))
 
         reply_text = generate_with_retry(client, parts)
         return {"reply": reply_text}
     
     except Exception as e:
-        # 【重要】ここが重要です。本当のエラーをログに出力します。
         error_detail = str(e)
         print(f"!!! CRITICAL ERROR: {error_detail} !!!", flush=True)
-        return {"error": f"Internal API Error: {error_detail[:50]}"}
+        return {"error": f"API Error: {error_detail[:50]}"}
 
 @app.post("/generate_title")
 async def generate_title(request: dict):
+    # タイトル生成（簡略版）
     return {"title": "チャット履歴"}
 
 @app.get("/")
 def read_root():
-    return {"status": "debug mode is active"}
+    return {"status": "Gemini AI Backend is running securely"}
