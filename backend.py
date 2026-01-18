@@ -9,13 +9,11 @@ from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
-# Windowsターミナルの日本語表示エラーを強制回避
+# Renderのログに即座に出力するための設定
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 app = FastAPI()
 
-# CORS設定（公開後、必要に応じて origins を制限します）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,36 +21,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- APIキーの設定 ---
-# GitHubに上げた際、キーを盗まれないよう os.getenv を使用します。
-# 第2引数に現在のキーを書いておくことで、自分のPCではそのまま動きます。
-API_KEYS = [
-    os.getenv("GEMINI_API_KEY_1", "AIzaSyAxSJE5c-aB3i0TkvgBa8ja432Bw1oo5tQ"),
-    os.getenv("GEMINI_API_KEY_2", "AIzaSyCDjrjx0-z5Zsv0JLOV9Xr-HMTimBqTrNo")
-]
+# --- APIキーの取得ロジック ---
+# 環境変数が設定されていない場合、コード内の値をフォールバックとして使います
+key1 = os.getenv("GEMINI_API_KEY_1", "AIzaSyAxSJE5c-aB3i0TkvgBa8ja432Bw1oo5tQ")
+key2 = os.getenv("GEMINI_API_KEY_2", "AIzaSyCDjrjx0-z5Zsv0JLOV9Xr-HMTimBqTrNo")
 
+API_KEYS = [k for k in [key1, key2] if k]
 key_cycle = itertools.cycle(API_KEYS)
 
 def get_next_client():
-    """リクエストごとに次のAPIキーを使用してクライアントを作成"""
     next_key = next(key_cycle)
+    # ログに使用するキーの断片を表示
+    print(f"DEBUG: Using Key starting with: {next_key[:8]}...", flush=True)
     return genai.Client(api_key=next_key)
 
-class ChatRequest(BaseModel):
-    message: str
-
 def generate_with_retry(client, contents):
-    """
-    お使いの環境で確実に存在するモデルを順番に試し、
-    404エラーや20回制限(429)を自動で回避します。
-    """
-    # 優先順：1.5-flash (1,500回枠) -> 2.0-flash -> latest
+    # あなたの環境で最も可能性が高いモデル名のリスト
     candidates = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
     
     last_error = None
     for model_name in candidates:
         try:
-            print(f"Trying model: {model_name}")
+            print(f"DEBUG: Trying model: {model_name}", flush=True)
             response = client.models.generate_content(
                 model=model_name,
                 contents=contents
@@ -60,55 +50,36 @@ def generate_with_retry(client, contents):
             return response.text
         except Exception as e:
             last_error = e
-            error_str = str(e)
-            print(f"Skipped {model_name}: {error_str[:50]}...")
+            print(f"DEBUG: Model {model_name} failed. Error: {str(e)[:100]}", flush=True)
             continue
             
     raise last_error
 
 @app.post("/chat")
 async def chat(message: str = Form(""), file: Optional[UploadFile] = File(None)):
+    print(f"--- New Chat Request Received ---", flush=True)
     try:
         client = get_next_client()
-        
-        # システム指示文
-        parts = ["詳細に日本語で回答してください。マークダウン形式（表や太字など）を適切に使用してください。"]
-        
+        parts = ["詳細に日本語で回答してください。"]
         if message:
             parts.append(f"質問: {message}")
-        
         if file:
             file_data = await file.read()
-            # 最新SDK専用の形式で画像を添付（18個のバリデーションエラーを回避）
-            parts.append(types.Part.from_bytes(
-                data=file_data,
-                mime_type=file.content_type
-            ))
+            parts.append(types.Part.from_bytes(data=file_data, mime_type=file.content_type))
 
-        # モデルを自動選択して生成
         reply_text = generate_with_retry(client, parts)
         return {"reply": reply_text}
     
     except Exception as e:
-        print(f"Final Error: {e}")
-        return {"error": "現在サーバーが混み合っているか、制限に達しています。1分後に再度お試しください。"}
+        # 【重要】ここが重要です。本当のエラーをログに出力します。
+        error_detail = str(e)
+        print(f"!!! CRITICAL ERROR: {error_detail} !!!", flush=True)
+        return {"error": f"Internal API Error: {error_detail[:50]}"}
 
 @app.post("/generate_title")
-async def generate_title(request: ChatRequest):
-    """チャット履歴用の短いタイトルを自動生成"""
-    try:
-        client = get_next_client()
-        # タイトル生成は gemini-1.5-flash を優先試行
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=f"以下の内容を要約し、非常に短いタイトル（名詞のみ、最大10文字）を1つ生成してください：\n{request.message}"
-        )
-        return {"title": response.text.strip()}
-    except:
-        # 失敗した場合は暫定のタイトルを返す
-        return {"title": "チャット履歴"}
+async def generate_title(request: dict):
+    return {"title": "チャット履歴"}
 
 @app.get("/")
 def read_root():
-    """サーバーの生存確認用"""
-    return {"status": "Gemini AI Backend is running"}
+    return {"status": "debug mode is active"}
