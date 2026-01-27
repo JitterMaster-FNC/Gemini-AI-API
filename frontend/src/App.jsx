@@ -35,9 +35,7 @@ function App() {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+    if (file) setSelectedFile(file);
     setAttachmentMenuOpen(false);
   };
 
@@ -51,6 +49,8 @@ function App() {
     };
     const currentInput = input;
     const currentFile = selectedFile;
+    // 記憶機能：メッセージ履歴を取得
+    const currentHistory = activeChat ? activeChat.messages : [];
 
     setInput('');
     setSelectedFile(null);
@@ -60,21 +60,16 @@ function App() {
 
     if (currentChatId === null) {
       const newId = Date.now();
-      const newChat = {
-        id: newId,
-        title: '...', 
-        messages: [userMessage]
-      };
+      const newChat = { id: newId, title: '...', messages: [userMessage] };
       setChats([newChat, ...chats]);
       setActiveChatId(newId);
       currentChatId = newId;
 
-      axios.post('https://gemini-ai-api-gpf7.onrender.com/generate_title', { message: currentInput || "ファイル添付" })
+      const titleData = new FormData();
+      titleData.append('message', currentInput || "ファイル添付");
+      axios.post('https://gemini-ai-api-gpf7.onrender.com/generate_title', titleData)
         .then(res => {
           setChats(prev => prev.map(c => c.id === newId ? { ...c, title: res.data.title } : c));
-        })
-        .catch(() => {
-          setChats(prev => prev.map(c => c.id === newId ? { ...c, title: '新しいチャット' } : c));
         });
     } else {
       setChats(prev => prev.map(chat => {
@@ -88,14 +83,10 @@ function App() {
     try {
       const formData = new FormData();
       formData.append('message', currentInput);
-      if (currentFile) {
-        formData.append('file', currentFile);
-      }
+      formData.append('history', JSON.stringify(currentHistory)); // 履歴を送信
+      if (currentFile) formData.append('file', currentFile);
 
-      const res = await axios.post('https://gemini-ai-api-gpf7.onrender.com/chat', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
+      const res = await axios.post('https://gemini-ai-api-gpf7.onrender.com/chat', formData);
       const aiMessage = { role: 'ai', text: res.data.reply || res.data.error };
       
       setChats(prev => prev.map(chat => {
@@ -116,85 +107,39 @@ function App() {
       position: 'absolute', bottom: '40px', left: '50%', transform: 'translateX(-50%)', width: '90%', maxWidth: '750px' 
     }}>
       {selectedFile && (
-        <div style={{ backgroundColor: '#333', padding: '5px 15px', borderRadius: '10px 10px 0 0', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', border: '1px solid #444', borderBottom: 'none', width: 'fit-content', marginLeft: '20px' }}>
-          📎 {selectedFile.name}
-          <span onClick={() => setSelectedFile(null)} style={{ marginLeft: '10px', cursor: 'pointer', color: '#ff4b4b' }}>×</span>
+        <div style={{ backgroundColor: '#333', padding: '5px 15px', borderRadius: '10px 10px 0 0', fontSize: '0.8rem', display: 'flex', border: '1px solid #444', borderBottom: 'none', width: 'fit-content', marginLeft: '20px' }}>
+          📎 {selectedFile.name} <span onClick={() => setSelectedFile(null)} style={{ marginLeft: '10px', cursor: 'pointer', color: '#ff4b4b' }}>×</span>
         </div>
       )}
       <div style={{ backgroundColor: '#2d2d2d', borderRadius: selectedFile ? '0 15px 15px 15px' : '15px', padding: '15px 20px', display: 'flex', alignItems: 'center', boxShadow: '0 0 20px rgba(0,0,0,0.4)', border: '1px solid #444', position: 'relative' }}>
-        
         <div style={{ position: 'relative' }}>
-          <span 
-            onClick={() => setAttachmentMenuOpen(!attachmentMenuOpen)}
-            style={{ color: '#888', marginRight: '15px', fontSize: '1.5rem', lineHeight: '0', cursor: 'pointer', userSelect: 'none' }}
-          >
-            +
-          </span>
+          <span onClick={() => setAttachmentMenuOpen(!attachmentMenuOpen)} style={{ color: '#888', marginRight: '15px', fontSize: '1.5rem', lineHeight: '0', cursor: 'pointer', userSelect: 'none' }}>+</span>
           {attachmentMenuOpen && (
-            <div style={{ position: 'absolute', bottom: '40px', left: '0', backgroundColor: '#171717', border: '1px solid #444', borderRadius: '8px', zIndex: 200, width: '150px', boxShadow: '0 5px 15px rgba(0,0,0,0.5)' }}>
-              <div 
-                onClick={() => imageInputRef.current.click()}
-                style={{ padding: '12px', fontSize: '0.9rem', cursor: 'pointer', borderBottom: '1px solid #333' }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#2b2b2b'}
-                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-              >
-                画像を添付
-              </div>
-              <div 
-                onClick={() => fileInputRef.current.click()}
-                style={{ padding: '12px', fontSize: '0.9rem', cursor: 'pointer' }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#2b2b2b'}
-                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-              >
-                ファイルを添付
-              </div>
+            <div style={{ position: 'absolute', bottom: '40px', left: '0', backgroundColor: '#171717', border: '1px solid #444', borderRadius: '8px', zIndex: 200, width: '150px' }}>
+              <div onClick={() => imageInputRef.current.click()} style={{ padding: '12px', fontSize: '0.9rem', cursor: 'pointer', borderBottom: '1px solid #333' }}>画像を添付</div>
+              <div onClick={() => fileInputRef.current.click()} style={{ padding: '12px', fontSize: '0.9rem', cursor: 'pointer' }}>ファイルを添付</div>
             </div>
           )}
         </div>
-
         <input type="file" ref={imageInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleFileChange} />
         <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
-
-        <input 
-          style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: 'white', fontSize: '1.1rem', outline: 'none', fontFamily: segoeFont }}
-          placeholder="メッセージを送信"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-        />
+        <input style={{ flex: 1, backgroundColor: 'transparent', border: 'none', color: 'white', fontSize: '1.1rem', outline: 'none', fontFamily: segoeFont }} placeholder="メッセージを送信" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} />
       </div>
-      <p style={{ fontSize: '0.7rem', color: '#8e8ea0', textAlign: 'center', marginTop: '10px' }}>
-        AIの回答は必ずしも正しいとは限りません。重要な情報は確認するようにしてください。
-      </p>
+      <p style={{ fontSize: '0.7rem', color: '#8e8ea0', textAlign: 'center', marginTop: '10px' }}>AIの回答は必ずしも正しいとは限りません。重要な情報は確認するようにしてください。</p>
     </div>
   );
 
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', backgroundColor: '#1e1e1e', color: 'white', fontFamily: segoeFont, overflow: 'hidden' }}>
-      
-      {/* サイドバー */}
       <div style={{ width: '260px', backgroundColor: '#171717', display: 'flex', flexDirection: 'column', padding: '10px', boxSizing: 'border-box', borderRight: '1px solid #333' }}>
-        <button 
-          onClick={goToLanding}
-          style={{ 
-            padding: '12px', marginBottom: '20px', cursor: 'pointer', backgroundColor: 'transparent', color: 'white', border: '1px solid #444', borderRadius: '5px', textAlign: 'left', fontSize: '0.9rem', fontFamily: segoeFont, display: 'flex', alignItems: 'center' 
-          }}
-        >
-          <span style={{ marginRight: '10px', fontSize: '1.2rem', fontWeight: 'bold' }}>+</span>
-          新しいチャットを作成
+        <button onClick={goToLanding} style={{ padding: '12px', marginBottom: '20px', cursor: 'pointer', backgroundColor: 'transparent', color: 'white', border: '1px solid #444', borderRadius: '5px', textAlign: 'left', fontSize: '0.9rem', fontFamily: segoeFont, display: 'flex', alignItems: 'center' }}>
+          <span style={{ marginRight: '10px', fontSize: '1.2rem' }}>+</span>新しいチャットを作成
         </button>
-
         <div style={{ overflowY: 'auto', flex: 1 }}>
           <p style={{ fontSize: '0.75rem', color: '#8e8ea0', fontWeight: 'bold', margin: '10px 5px' }}>会話履歴</p>
           {chats.map(chat => (
-            <div 
-              key={chat.id}
-              onClick={() => setActiveChatId(chat.id)}
-              style={{ position: 'relative', padding: '12px', margin: '2px 0', cursor: 'pointer', borderRadius: '5px', backgroundColor: chat.id === activeChatId ? '#2b2b2b' : 'transparent', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '80%' }}>
-                {chat.title}
-              </span>
+            <div key={chat.id} onClick={() => setActiveChatId(chat.id)} style={{ position: 'relative', padding: '12px', margin: '2px 0', cursor: 'pointer', borderRadius: '5px', backgroundColor: chat.id === activeChatId ? '#2b2b2b' : 'transparent', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '80%' }}>{chat.title}</span>
               <div onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === chat.id ? null : chat.id); }} style={{ padding: '0 5px', fontSize: '1.2rem', color: '#8e8ea0' }}>⋮</div>
               {menuOpenId === chat.id && (
                 <div style={{ position: 'absolute', right: '10px', top: '40px', backgroundColor: '#050505', border: '1px solid #444', borderRadius: '5px', zIndex: 100 }}>
@@ -205,30 +150,20 @@ function App() {
           ))}
         </div>
       </div>
-
-      {/* メインエリア */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', padding: !activeChat ? '0' : '40px 20px 150px 20px', justifyContent: !activeChat ? 'center' : 'flex-start' }}>
           {!activeChat ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '10px' }}>
-                  <img src="/cat.png" style={{ height: '100px', width: 'auto' }} alt="logo-left" />
-                  <h1 style={{ fontSize: '4rem', fontWeight: 'bold', letterSpacing: '-1px', margin: '0' }}>Self Made AI</h1>
-                  <img src="/cat.png" style={{ height: '100px', width: 'auto' }} alt="logo-right" />
-               </div>
+               <h1 style={{ fontSize: '4rem', fontWeight: 'bold', letterSpacing: '-1px', margin: '0' }}>Gemini AI API</h1>
                {renderInputSection(true)}
             </div>
           ) : (
             <div style={{ width: '100%', maxWidth: '800px' }}>
               {activeChat.messages.map((msg, i) => (
                 <div key={i} style={{ marginBottom: '30px', textAlign: msg.role === 'user' ? 'right' : 'left' }}>
-                  <div className="markdown-body" style={{
-                    display: 'inline-block', padding: '15px 25px', borderRadius: '20px', backgroundColor: msg.role === 'user' ? '#333' : '#262626', border: msg.role === 'user' ? 'none' : '1px solid #444', lineHeight: '1.6', maxWidth: '85%', textAlign: 'left', color: '#ececf1', wordBreak: 'break-word'
-                  }}>
+                  <div className="markdown-body" style={{ display: 'inline-block', padding: '15px 25px', borderRadius: '20px', backgroundColor: msg.role === 'user' ? '#333' : '#262626', border: msg.role === 'user' ? 'none' : '1px solid #444', lineHeight: '1.6', maxWidth: '85%', textAlign: 'left', color: '#ececf1', wordBreak: 'break-word' }}>
                     {msg.fileName && <div style={{ fontSize: '0.8rem', color: '#aaa', marginBottom: '5px', borderBottom: '1px solid #444', paddingBottom: '5px' }}>📎 {msg.fileName}</div>}
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.text}
-                    </ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
                   </div>
                 </div>
               ))}
